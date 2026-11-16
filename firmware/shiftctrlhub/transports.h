@@ -6,13 +6,15 @@
  * SHIFTCTRLHUB — UNIFIED WIRELESS TRANSPORTS (UDP, BLE, SPP)
  * =============================================================================
  * Implements:
+ *   - Hybrid Auto-Wi-Fi (when ENABLE_HYBRID_WIFI == 1): tries STA first,
+ *     automatically falls back to SoftAP if no configured router connects.
  *   - Mode 1: Wi-Fi SoftAP with UDP (Port 3333, IP: 192.168.4.1)
  *   - Mode 2: Wi-Fi STA with WiFiMulti & UDP (Multi-AP failover + UDP Discovery)
  *   - Mode 3: Bluetooth Low Energy (BLE GATT Server UART)
  *   - Mode 4: Bluetooth Classic SPP (BluetoothSerial)
  * ============================================================================= */
 
-#if ACTIVE_TRANSPORT == CONN_STA
+#if (ACTIVE_TRANSPORT == CONN_STA) || (ACTIVE_TRANSPORT == CONN_SOFTAP)
   #include <WiFi.h>
   #include <WiFiMulti.h>
   #include <WiFiUdp.h>
@@ -25,102 +27,40 @@
   static unsigned long lastHbTime = 0;
 
   class TransportManager {
-  public:
-    void begin() {
-      Serial.println("\n[ShiftCtrlHub] Initializing Wi-Fi STA with WiFiMulti...");
+  private:
+    bool _usingSoftAp = false;
+
+    bool connectStaWithTimeout(unsigned long timeoutMs) {
+      Serial.println("\n[ShiftCtrlHub] Trying Wi-Fi STA (WiFiMulti)...");
       WiFi.mode(WIFI_STA);
 
-      // Register all user-configured AP credentials
       for (size_t i = 0; i < STA_NETWORK_COUNT; i++) {
         wifiMulti.addAP(STA_NETWORKS[i].ssid, STA_NETWORKS[i].password);
         Serial.printf("[WiFiMulti] Registered AP: %s\n", STA_NETWORKS[i].ssid);
       }
 
-      Serial.print("[WiFiMulti] Connecting to best available AP");
-      unsigned long connectStart = millis();
-      while (wifiMulti.run() != WL_CONNECTED && (millis() - connectStart < 15000UL)) {
+      Serial.print("[WiFiMulti] Connecting");
+      unsigned long startMs = millis();
+      while (wifiMulti.run() != WL_CONNECTED && (millis() - startMs < timeoutMs)) {
         delay(300);
         Serial.print(".");
       }
 
       if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n[WiFiMulti] Connected Successfully!");
+        Serial.println("\n[WiFiMulti] STA Connected Successfully!");
         Serial.printf("[WiFiMulti] Active SSID: %s\n", WiFi.SSID().c_str());
         Serial.printf("[WiFiMulti] IP Address : %s\n", WiFi.localIP().toString().c_str());
         Serial.printf("[WiFiMulti] Signal RSSI: %d dBm\n", WiFi.RSSI());
-      } else {
-        Serial.println("\n[WiFiMulti] WARN: No AP connected within 15s (update STA_NETWORKS in config.h). Will retry in background.");
+        return true;
       }
 
-      udp.begin(UDP_PORT);
-      Serial.printf("[UDP] Listening for commands on UDP port %d\n", UDP_PORT);
+      Serial.println("\n[WiFiMulti] No configured Wi-Fi router connected within timeout.");
+      return false;
     }
 
-    String checkIncoming() {
-      static unsigned long lastReconnectAttempt = 0;
-      // 1. Non-blocking periodic auto-reconnect failover
-      if (WiFi.status() != WL_CONNECTED) {
-        if (millis() - lastReconnectAttempt > 5000UL) {
-          lastReconnectAttempt = millis();
-          Serial.println("[WiFiMulti] Reconnecting to configured APs...");
-          if (wifiMulti.run() == WL_CONNECTED) {
-            Serial.printf("[WiFiMulti] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-            udp.begin(UDP_PORT);
-          }
-        }
-        return "";
-      }
-
-      // 2. Poll UDP Socket for datagrams
-      int packetSize = udp.parsePacket();
-      if (packetSize > 0) {
-        remoteClientIP = udp.remoteIP();
-        remoteClientPort = udp.remotePort();
-
-        int len = udp.read(incomingBuffer, sizeof(incomingBuffer) - 1);
-        if (len <= 0) return "";
-        incomingBuffer[len] = '\0';
-        String msg = String(incomingBuffer);
-        msg.trim();
-
-        // Check for UDP Auto-Discovery Broadcast
-        if (msg == DISCOVERY_REQ_TOKEN || msg == HANDSHAKE_REQ_TOKEN) {
-          Serial.printf("[UDP-DISCOVERY] Request from %s:%d -> Replying with IP\n",
-                        remoteClientIP.toString().c_str(), remoteClientPort);
-          udp.beginPacket(remoteClientIP, remoteClientPort);
-          udp.printf("IP:%s\n", WiFi.localIP().toString().c_str());
-          udp.endPacket();
-          return ""; // Handled internally
-        }
-
-        return msg;
-      }
-
-      // 3. Optional periodic heartbeat to client
-      if (remoteClientPort > 0 && millis() - lastHbTime > HEARTBEAT_INTERVAL_MS) {
-        lastHbTime = millis();
-        udp.beginPacket(remoteClientIP, remoteClientPort);
-        udp.print("HB\n");
-        udp.endPacket();
-      }
-
-      return "";
-    }
-  };
-
-#elif ACTIVE_TRANSPORT == CONN_SOFTAP
-  #include <WiFi.h>
-  #include <WiFiUdp.h>
-
-  static WiFiUDP udp;
-  static char incomingBuffer[256];
-  static IPAddress remoteClientIP;
-  static uint16_t remoteClientPort = 0;
-
-  class TransportManager {
-  public:
-    void begin() {
-      Serial.println("\n[ShiftCtrlHub] Initializing Wi-Fi SoftAP...");
+    void startSoftAPInterface() {
+      Serial.println("\n[ShiftCtrlHub] Starting Wi-Fi SoftAP Hotspot...");
+      WiFi.disconnect(true);
       WiFi.mode(WIFI_AP);
 
       IPAddress local_IP(192, 168, 4, 1);
@@ -133,12 +73,10 @@
       Serial.printf("[SoftAP] Hotspot SSID: %s\n", SOFTAP_SSID);
       Serial.printf("[SoftAP] Hotspot Pass: %s\n", SOFTAP_PASS);
       Serial.printf("[SoftAP] Gateway IP  : %s\n", WiFi.softAPIP().toString().c_str());
-
-      udp.begin(UDP_PORT);
-      Serial.printf("[UDP] Listening on port %d\n", UDP_PORT);
+      _usingSoftAp = true;
     }
 
-    String checkIncoming() {
+    String pollUdp(const String& advertisedIp, bool sendHeartbeat) {
       int packetSize = udp.parsePacket();
       if (packetSize > 0) {
         remoteClientIP = udp.remoteIP();
@@ -150,15 +88,68 @@
         String msg = String(incomingBuffer);
         msg.trim();
 
-        if (msg == HANDSHAKE_REQ_TOKEN || msg == DISCOVERY_REQ_TOKEN) {
+        if (msg == DISCOVERY_REQ_TOKEN || msg == HANDSHAKE_REQ_TOKEN) {
+          Serial.printf("[UDP-DISCOVERY] Request from %s:%d -> Replying IP:%s\n",
+                        remoteClientIP.toString().c_str(), remoteClientPort, advertisedIp.c_str());
           udp.beginPacket(remoteClientIP, remoteClientPort);
-          udp.print("IP:192.168.4.1\n");
+          udp.printf("IP:%s\n", advertisedIp.c_str());
           udp.endPacket();
           return "";
         }
         return msg;
       }
+
+      if (sendHeartbeat && remoteClientPort > 0 && (millis() - lastHbTime > HEARTBEAT_INTERVAL_MS)) {
+        lastHbTime = millis();
+        udp.beginPacket(remoteClientIP, remoteClientPort);
+        udp.print("HB\n");
+        udp.endPacket();
+      }
       return "";
+    }
+
+  public:
+    void begin() {
+#if ENABLE_HYBRID_WIFI == 1
+      Serial.println("[Hybrid Wi-Fi] ENABLED: Trying STA first, SoftAP fallback if unavailable.");
+      if (connectStaWithTimeout(HYBRID_STA_TIMEOUT_MS)) {
+        _usingSoftAp = false;
+      } else {
+        Serial.println("[Hybrid Wi-Fi] Falling back to SoftAP mode...");
+        startSoftAPInterface();
+      }
+#elif ACTIVE_TRANSPORT == CONN_STA
+      Serial.println("[Strict Wi-Fi] Hybrid OFF: Using STA mode only.");
+      connectStaWithTimeout(15000UL);
+      _usingSoftAp = false;
+#else
+      Serial.println("[Strict Wi-Fi] Hybrid OFF: Using SoftAP mode only.");
+      startSoftAPInterface();
+#endif
+      udp.begin(UDP_PORT);
+      Serial.printf("[UDP] Listening for commands on UDP port %d\n", UDP_PORT);
+    }
+
+    String checkIncoming() {
+      static unsigned long lastReconnectAttempt = 0;
+
+      if (_usingSoftAp) {
+        return pollUdp("192.168.4.1", false);
+      }
+
+      if (WiFi.status() != WL_CONNECTED) {
+        if (millis() - lastReconnectAttempt > 5000UL) {
+          lastReconnectAttempt = millis();
+          Serial.println("[WiFiMulti] Reconnecting to configured APs...");
+          if (wifiMulti.run() == WL_CONNECTED) {
+            Serial.printf("[WiFiMulti] Reconnected! IP: %s\n", WiFi.localIP().toString().c_str());
+            udp.begin(UDP_PORT);
+          }
+        }
+        return "";
+      }
+
+      return pollUdp(WiFi.localIP().toString(), true);
     }
   };
 

@@ -20,9 +20,19 @@
 #define CONN_BLE     3   // Bluetooth Low Energy (BLE GATT Server)
 #define CONN_SPP     4   // Bluetooth Classic SPP (SerialBT)
 
-// CHOOSE ACTIVE TRANSPORT (Change here to select mode):
+// CHOOSE ACTIVE TRANSPORT (Change here to select single mode when Hybrid is OFF):
 // CONN_SOFTAP works out-of-the-box at 192.168.4.1:3333 matching the remote UI.
 #define ACTIVE_TRANSPORT CONN_SOFTAP
+
+// -----------------------------------------------------------------------------
+// 1B. HYBRID AUTO-WIFI TOGGLE (STA -> SoftAP Fallback)
+//   1 (ON)  : When using Wi-Fi (CONN_STA or CONN_SOFTAP), tries STA_NETWORKS
+//             first for HYBRID_STA_TIMEOUT_MS (10s). If a router connects, it
+//             uses STA; if not, it automatically falls back to SoftAP hotspot.
+//   0 (OFF) : Strictly uses ONLY the single ACTIVE_TRANSPORT chosen above.
+// -----------------------------------------------------------------------------
+#define ENABLE_HYBRID_WIFI    1
+#define HYBRID_STA_TIMEOUT_MS 10000UL
 
 // -----------------------------------------------------------------------------
 // 2. WI-FI STA CREDENTIALS (WiFiMulti Auto-Connect List)

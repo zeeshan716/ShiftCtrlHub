@@ -19,12 +19,17 @@ firmware/shiftctrlhub/
 
 ## ⚡ 1. How to Select the Active Connection Mode
 
-In `config.h`, set `#define ACTIVE_TRANSPORT` to your chosen mode:
+In `config.h`, you can enable **Hybrid Auto-Wi-Fi** or lock strictly to a single transport mode:
 
 ```cpp
-// Choose one of:
-#define ACTIVE_TRANSPORT CONN_STA     // Wi-Fi Station with multi-AP auto-failover (UDP 3333)
-// #define ACTIVE_TRANSPORT CONN_SOFTAP  // Direct Hotspot hosted by the robot MCU (UDP 3333)
+// Hybrid Wi-Fi ON/OFF toggle:
+//   1 = Try STA_NETWORKS for 10s first (takes priority), fallback to SoftAP if none connect
+//   0 = OFF (strictly use ONLY the single ACTIVE_TRANSPORT chosen below)
+#define ENABLE_HYBRID_WIFI    1
+
+// Choose strict single mode (or BLE / SPP):
+#define ACTIVE_TRANSPORT CONN_SOFTAP  // Direct Hotspot hosted by the robot MCU (UDP 3333)
+// #define ACTIVE_TRANSPORT CONN_STA     // Wi-Fi Station with multi-AP auto-failover (UDP 3333)
 // #define ACTIVE_TRANSPORT CONN_BLE     // Bluetooth Low Energy GATT Server
 // #define ACTIVE_TRANSPORT CONN_SPP     // Classic Bluetooth Serial (Pair with "ShiftCtrlHub")
 ```
