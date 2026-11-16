@@ -7,7 +7,7 @@ Enables desktop web browsers (Chrome/Firefox/Edge) to transmit and receive
 real-time raw UDP datagrams to/from the robot MCU on the local network.
 
 Runs entirely on Python 3 Standard Library (ZERO pip dependencies required).
-Listens on HTTP port 8765 for commands from app_redesign_preview.html,
+Listens on HTTP port 8765 for commands from index.html,
 and transmits raw UDP packets to the robot MCU (port 3333).
 =============================================================================
 """

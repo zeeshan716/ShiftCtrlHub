@@ -86,7 +86,7 @@ class ShiftCtrlHubHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path in ["/", "/index.html", "/remote"]:
-            self.path = "/app_redesign_preview.html"
+            self.path = "/index.html"
             return super().do_GET()
         elif parsed.path == "/status":
             self.send_response(200)

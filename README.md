@@ -36,9 +36,7 @@
 ```
 .
 ├── index.html                           # Production remote control web interface (GitHub Pages entry)
-├── app_redesign_preview.html            # Development & testing remote interface
-├── ShiftCtrlHub_Components_Catalog.pdf  # Official 3-column component catalog with cropped snapshots
-├── ShiftCtrlHub_Components_Catalog.html # Web edition of the components catalog
+├── ShiftCtrlHub_Components_Catalog.pdf  # Official 3-column component catalog with reference snapshots
 ├── remote_parts_catalog.md              # Standardized Markdown catalog with part identifiers
 ├── firmware/
 │   └── shiftctrlhub/                    # Modular multi-MCU robotics firmware
@@ -55,8 +53,7 @@
 ├── tools/
 │   ├── shiftctrlhub_server.py           # Local web & UDP datagram relay bridge
 │   └── udp_bridge.py                    # Standalone lightweight UDP forwarder
-├── LICENSE                              # MIT open-source license
-└── catalog_images/                      # 60+ individual component reference photos
+└── LICENSE                              # MIT open-source license
 ```
 
 ---

@@ -94,11 +94,11 @@ The microcontroller processes the following real-time tokens:
 
 ## 💻 5. Local Browser Testing with `udp_bridge.py`
 
-Browsers sandbox raw UDP sockets, so to test the HTML remote (`app_redesign_preview.html`) on your desktop before packaging to Android:
+Browsers sandbox raw UDP sockets, so to test the HTML remote (`index.html`) on your desktop before packaging to mobile:
 
 1. Run the local bridge in PowerShell or terminal:
    ```powershell
    python tools/udp_bridge.py
    ```
-2. Open `app_redesign_preview.html` in your browser.
+2. Open `index.html` in your browser.
 3. Every button press, throttle drag, and PID slider movement will transmit directly to your robot microcontroller over UDP!
