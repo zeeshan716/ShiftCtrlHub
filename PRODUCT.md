@@ -46,7 +46,8 @@ Unlike bloated cloud IoT dashboards or sluggish webview remotes, this is a low-l
   - Tactile micro-interactions (authentic physical depression, micro-LED active state indicators, tabular numerals `tabular-nums` for rock-solid non-jittering readings).
   - High performance: no frame drops, no obstructive animations during driving.
 
-## Brand Commitments
+## Design & Developer Commitments
 
-- Minimalist, high-craft physical instrument design (tactile physical console, precision machined aesthetics, tactile thumb wells, zero generic web-card clutter).
-- Clear, readable system typography and high-contrast status feedback.
+- **Forever Free & Ad-Free:** ShiftCtrlHub will forever remain **100% free**, Inshallah, and will **always stay completely ad-free** — zero advertisements, zero tracking, and zero feature paywalls.
+- **Minimalist Hardware Instrument Craft:** High-craft physical instrument design (tactile physical console, precision machined aesthetics, tactile thumb wells, zero generic web-card clutter).
+- **Legibility & Contrast:** Clear, readable system typography and high-contrast status feedback for both sunlit arenas and dark labs.

@@ -48,11 +48,13 @@
 │       ├── lfr_pidv.h                   # 5-IR sensor weighted PIDV line follower & pattern recovery
 │       ├── transports.h                 # Wireless transport engines (STA UDP, SoftAP, BLE, SPP)
 │       └── README.md                    # Detailed firmware flashing and wiring guide
+├── mobile/
+│   ├── pubspec.yaml                     # Flutter mobile client manifest (Beta skeleton)
+│   ├── README.md                        # Mobile app parity & build notes
+│   └── lib/main.dart                    # Landscape cockpit + raw UDP driver
 ├── tools/
 │   ├── shiftctrlhub_server.py           # Local web & UDP datagram relay bridge
-│   ├── udp_bridge.py                    # Standalone lightweight UDP forwarder
-│   ├── build_catalog_pdf.py             # Playwright PDF catalog builder
-│   └── capture_catalog_images.py        # Automated component screenshot capture tool
+│   └── udp_bridge.py                    # Standalone lightweight UDP forwarder
 ├── LICENSE                              # MIT open-source license
 └── catalog_images/                      # 60+ individual component reference photos
 ```

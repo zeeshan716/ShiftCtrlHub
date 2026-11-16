@@ -23,3 +23,6 @@ desktop.ini
 
 # Local archived prototypes (kept on disk, excluded from public repo)
 archive/
+
+# Personal planning & future feature backlog (local only)
+FUTURE_IDEAS.md
