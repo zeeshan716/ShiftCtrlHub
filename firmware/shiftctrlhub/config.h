@@ -21,7 +21,8 @@
 #define CONN_SPP     4   // Bluetooth Classic SPP (SerialBT)
 
 // CHOOSE ACTIVE TRANSPORT (Change here to select mode):
-#define ACTIVE_TRANSPORT CONN_STA
+// CONN_SOFTAP works out-of-the-box at 192.168.4.1:3333 matching the remote UI.
+#define ACTIVE_TRANSPORT CONN_SOFTAP
 
 // -----------------------------------------------------------------------------
 // 2. WI-FI STA CREDENTIALS (WiFiMulti Auto-Connect List)
@@ -96,7 +97,7 @@ const size_t STA_NETWORK_COUNT = sizeof(STA_NETWORKS) / sizeof(STA_NETWORKS[0]);
 #define PIN_IR_S2      35   // Mid Left
 #define PIN_IR_S3      32   // Center
 #define PIN_IR_S4      33   // Mid Right
-#define PIN_IR_S5      25   // Far Right
+#define PIN_IR_S5      36   // Far Right (ADC1 VP — safe while Wi-Fi is active)
 
 #define IR_THRESHOLD   1500  // Analog reading below this indicates line
 #define LINE_IS_BLACK  true  // true = black line on white surface; false = white on black

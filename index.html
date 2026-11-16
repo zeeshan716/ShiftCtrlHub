@@ -1677,6 +1677,7 @@
         if (btnBjToggle) btnBjToggle.classList.add('disabled');
       }
       evaluateActiveCockpit();
+      dispatchCommand(`MODE:${mode}`);
     }
 
     function setDriveMode(drive) {
@@ -1692,6 +1693,7 @@
         pill4v4.classList.remove('active');
       }
       evaluateActiveCockpit();
+      dispatchCommand(`DRIVE:${drive.toUpperCase()}`);
     }
 
     // 2. Evaluate and display the correct view based on Kodular logic
@@ -1833,6 +1835,7 @@
 
       const ratio = 1 - (relativeY / availableTravel);
       const computedSpeed = Math.round(ratio * 255);
+      if (computedSpeed === currentSpeed) return;
 
       update4wdThrottleVisual(computedSpeed);
       dispatchCommand(`S:${computedSpeed}`);
@@ -1914,6 +1917,7 @@
       const readout = document.getElementById(readoutId);
       let dragging = false;
       let pId = null;
+      let lastPct = null;
 
       function onMove(clientY) {
         if (!dragging) return;
@@ -1926,6 +1930,8 @@
 
         knob.style.top = `calc(50% + ${deltaY - 19}px)`;
         const pct = Math.round((-deltaY / maxTravel) * 100);
+        if (pct === lastPct) return;
+        lastPct = pct;
         readout.textContent = `${pct > 0 ? '+' : ''}${pct}%`;
 
         // Dynamic color feedback for forward (+) vs reverse (-)
@@ -1948,6 +1954,7 @@
       function onRelease() {
         if (!dragging) return;
         dragging = false;
+        lastPct = null;
         knob.style.transition = 'top 0.15s ease-out';
         knob.style.top = 'calc(50% - 19px)';
         setTimeout(() => { knob.style.transition = 'none'; }, 160);
@@ -1981,6 +1988,7 @@
       const readout = document.getElementById(readoutId);
       let dragging = false;
       let pId = null;
+      let lastPct = null;
 
       function onMove(clientX) {
         if (!dragging) return;
@@ -1993,6 +2001,8 @@
 
         knob.style.left = `calc(50% + ${deltaX - 19}px)`;
         const pct = Math.round((deltaX / maxTravel) * 100);
+        if (pct === lastPct) return;
+        lastPct = pct;
         readout.textContent = `${pct > 0 ? '+' : ''}${pct}%`;
 
         // Dynamic color feedback for steering angle
@@ -2011,6 +2021,7 @@
       function onRelease() {
         if (!dragging) return;
         dragging = false;
+        lastPct = null;
         knob.style.transition = 'left 0.15s ease-out';
         knob.style.left = 'calc(50% - 19px)';
         setTimeout(() => { knob.style.transition = 'none'; }, 160);
@@ -2046,6 +2057,7 @@
       const knob = document.getElementById('joyStickHead');
       let dragging = false;
       let pId = null;
+      let lastJoyCmd = null;
 
       function onMove(clientX, clientY) {
         if (!dragging) return;
@@ -2075,7 +2087,10 @@
 
         const db = parseInt(document.getElementById('joyDeadband').value) || 10;
         if (mag < db) {
-          dispatchCommand('C:S');
+          if (lastJoyCmd !== 'C:S') {
+            lastJoyCmd = 'C:S';
+            dispatchCommand('C:S');
+          }
           return;
         }
 
@@ -2107,12 +2122,16 @@
           }
         }
 
-        dispatchCommand(cmd);
+        if (cmd !== lastJoyCmd) {
+          lastJoyCmd = cmd;
+          dispatchCommand(cmd);
+        }
       }
 
       function onRelease() {
         if (!dragging) return;
         dragging = false;
+        lastJoyCmd = null;
         knob.style.transition = 'all 0.15s ease-out';
         knob.style.left = 'calc(50% - 30px)';
         knob.style.top = 'calc(50% - 30px)';

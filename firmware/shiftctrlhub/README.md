@@ -61,7 +61,7 @@ When the robot joins your local network, the remote app can broadcast `"Discover
 | **LFR Sensor S2** | `GPIO 35` (Analog IN) | Mid Left IR Reflective Sensor |
 | **LFR Sensor S3** | `GPIO 32` (Analog IN) | Center IR Reflective Sensor |
 | **LFR Sensor S4** | `GPIO 33` (Analog IN) | Mid Right IR Reflective Sensor |
-| **LFR Sensor S5** | `GPIO 25` (Analog IN) | Far Right IR Reflective Sensor |
+| **LFR Sensor S5** | `GPIO 36` (Analog IN) | Far Right IR Reflective Sensor |
 
 *(All pins can be customized in `config.h`)*.
 

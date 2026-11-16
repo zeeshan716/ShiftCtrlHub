@@ -71,7 +71,7 @@
 | **LFR Sensor S2** | `GPIO 35` | Mid Left IR Sensor | Analog / Comparator Input |
 | **LFR Sensor S3** | `GPIO 32` | Center IR Sensor | Tracking Line Reference |
 | **LFR Sensor S4** | `GPIO 33` | Mid Right IR Sensor | Analog / Comparator Input |
-| **LFR Sensor S5** | `GPIO 25` | Far Right IR Sensor | TCRT5000 / QTR-5A Array |
+| **LFR Sensor S5** | `GPIO 36` | Far Right IR Sensor | TCRT5000 / QTR-5A Array (ADC1) |
 
 *(All pins are fully customizable for your microcontroller in `firmware/shiftctrlhub/config.h`)*.
 

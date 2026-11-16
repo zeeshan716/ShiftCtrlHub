@@ -83,17 +83,25 @@ class ShiftCtrlHubBridgeHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 token = post_body.strip()
 
+            send_error = None
             if token:
-                # Send raw UDP datagram to robot MCU
-                msg_bytes = (token + "\n").encode('utf-8')
-                udp_socket.sendto(msg_bytes, (target_ip, target_port))
-                print(f"[UDP TX -> {target_ip}:{target_port}] {token}")
+                try:
+                    # Send raw UDP datagram to robot MCU
+                    msg_bytes = (token + "\n").encode('utf-8')
+                    udp_socket.sendto(msg_bytes, (target_ip, target_port))
+                    print(f"[UDP TX -> {target_ip}:{target_port}] {token}")
+                except OSError as exc:
+                    send_error = str(exc)
+                    print(f"[UDP TX ERROR -> {target_ip}:{target_port}] {send_error}")
 
-            self.send_response(200)
+            self.send_response(200 if not send_error else 502)
             self._set_cors_headers()
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "sent", "token": token, "ip": target_ip}).encode('utf-8'))
+            payload_out = {"status": "sent" if not send_error else "error", "token": token, "ip": target_ip}
+            if send_error:
+                payload_out["error"] = send_error
+            self.wfile.write(json.dumps(payload_out).encode('utf-8'))
 
         elif parsed.path == "/discover":
             # Broadcast Discovery_Request to 255.255.255.255:3333

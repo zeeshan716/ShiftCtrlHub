@@ -85,25 +85,33 @@ void processIncomingCommand(const String& cmd) {
     return;
   }
 
-  // 3. Motion Commands (C:*)
+  // 3. Motion Commands (C:F, C:B, C:L, C:R, C:FR, C:FL, C:BR, C:BL, C:S)
   if (cmd.startsWith("C:")) {
-    char action = cmd.charAt(2);
+    String action = cmd.substring(2);
     if (currentMode == OP_MODE_RC) {
       if (currentArch == ARCH_4V4_DIFF) {
-        drive.drive4wdCardinal(action);
+        if (action == "FR")      drive.drive4wdJoystick(50, 100);
+        else if (action == "FL") drive.drive4wdJoystick(-50, 100);
+        else if (action == "BR") drive.drive4wdJoystick(50, -100);
+        else if (action == "BL") drive.drive4wdJoystick(-50, -100);
+        else                     drive.drive4wdCardinal(action.charAt(0));
       } else {
-        // 2WD buttons fallback
-        if (action == 'F') { drive.drive2wdThrottle(100); drive.steer2wdPercent(0); }
-        else if (action == 'B') { drive.drive2wdThrottle(-100); drive.steer2wdPercent(0); }
-        else if (action == 'L') { drive.drive2wdThrottle(60); drive.steer2wdPercent(-80); }
-        else if (action == 'R') { drive.drive2wdThrottle(60); drive.steer2wdPercent(80); }
-        else { drive.drive2wdThrottle(0); drive.steer2wdPercent(0); }
+        // 2WD buttons & directional joystick vectors
+        if (action == "F")       { drive.drive2wdThrottle(100);  drive.steer2wdPercent(0); }
+        else if (action == "B")  { drive.drive2wdThrottle(-100); drive.steer2wdPercent(0); }
+        else if (action == "FR") { drive.drive2wdThrottle(100);  drive.steer2wdPercent(75); }
+        else if (action == "FL") { drive.drive2wdThrottle(100);  drive.steer2wdPercent(-75); }
+        else if (action == "BR") { drive.drive2wdThrottle(-100); drive.steer2wdPercent(75); }
+        else if (action == "BL") { drive.drive2wdThrottle(-100); drive.steer2wdPercent(-75); }
+        else if (action == "L")  { drive.drive2wdThrottle(60);   drive.steer2wdPercent(-80); }
+        else if (action == "R")  { drive.drive2wdThrottle(60);   drive.steer2wdPercent(80); }
+        else                     { drive.drive2wdThrottle(0);    drive.steer2wdPercent(0); }
       }
     } else {
       // In LFR mode, C:S pauses line follower
-      if (action == 'S') {
+      if (action == "S") {
         lfr.setEnabled(false);
-      } else if (action == 'F') {
+      } else if (action == "F") {
         lfr.setEnabled(true);
       }
     }
@@ -159,7 +167,22 @@ void processIncomingCommand(const String& cmd) {
       String param = cmd.substring(firstColon + 1, secondColon);
       float val = cmd.substring(secondColon + 1).toFloat();
 
-      if (param.equalsIgnoreCase("Speed")) {
+      if (param.equalsIgnoreCase("ALL")) {
+        // Format: V:ALL:<speed>:<kp>:<ki>:<kd>:<kv>
+        int c3 = cmd.indexOf(':', secondColon + 1);
+        int c4 = (c3 != -1) ? cmd.indexOf(':', c3 + 1) : -1;
+        int c5 = (c4 != -1) ? cmd.indexOf(':', c4 + 1) : -1;
+        int c6 = (c5 != -1) ? cmd.indexOf(':', c5 + 1) : -1;
+        if (c6 != -1) {
+          lfr.setBaseSpeed(cmd.substring(secondColon + 1, c3).toInt());
+          lfr.setKp(cmd.substring(c3 + 1, c4).toFloat());
+          lfr.setKi(cmd.substring(c4 + 1, c5).toFloat());
+          lfr.setKd(cmd.substring(c5 + 1, c6).toFloat());
+          lfr.setKv(cmd.substring(c6 + 1).toFloat());
+          Serial.printf("[LFR] ALL -> Spd:%d Kp:%.2f Ki:%.3f Kd:%.2f Kv:%.2f\n",
+                        lfr.getBaseSpeed(), lfr.getKp(), lfr.getKi(), lfr.getKd(), lfr.getKv());
+        }
+      } else if (param.equalsIgnoreCase("Speed")) {
         lfr.setBaseSpeed((int)val);
         Serial.printf("[LFR] Base Speed -> %d\n", (int)val);
       } else if (param.equalsIgnoreCase("Kp")) {

@@ -37,31 +37,38 @@
       }
 
       Serial.print("[WiFiMulti] Connecting to best available AP");
-      while (wifiMulti.run() != WL_CONNECTED) {
+      unsigned long connectStart = millis();
+      while (wifiMulti.run() != WL_CONNECTED && (millis() - connectStart < 15000UL)) {
         delay(300);
         Serial.print(".");
       }
 
-      Serial.println("\n[WiFiMulti] Connected Successfully!");
-      Serial.printf("[WiFiMulti] Active SSID: %s\n", WiFi.SSID().c_str());
-      Serial.printf("[WiFiMulti] IP Address : %s\n", WiFi.localIP().toString().c_str());
-      Serial.printf("[WiFiMulti] Signal RSSI: %d dBm\n", WiFi.RSSI());
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n[WiFiMulti] Connected Successfully!");
+        Serial.printf("[WiFiMulti] Active SSID: %s\n", WiFi.SSID().c_str());
+        Serial.printf("[WiFiMulti] IP Address : %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("[WiFiMulti] Signal RSSI: %d dBm\n", WiFi.RSSI());
+      } else {
+        Serial.println("\n[WiFiMulti] WARN: No AP connected within 15s (update STA_NETWORKS in config.h). Will retry in background.");
+      }
 
       udp.begin(UDP_PORT);
       Serial.printf("[UDP] Listening for commands on UDP port %d\n", UDP_PORT);
     }
 
     String checkIncoming() {
-      // 1. Maintain connection with auto-reconnect failover
-      if (wifiMulti.run() != WL_CONNECTED) {
-        Serial.println("\n[WiFiMulti] Connection lost! Scanning alternate APs...");
-        while (wifiMulti.run() != WL_CONNECTED) {
-          delay(400);
-          Serial.print(".");
+      static unsigned long lastReconnectAttempt = 0;
+      // 1. Non-blocking periodic auto-reconnect failover
+      if (WiFi.status() != WL_CONNECTED) {
+        if (millis() - lastReconnectAttempt > 5000UL) {
+          lastReconnectAttempt = millis();
+          Serial.println("[WiFiMulti] Reconnecting to configured APs...");
+          if (wifiMulti.run() == WL_CONNECTED) {
+            Serial.printf("[WiFiMulti] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+            udp.begin(UDP_PORT);
+          }
         }
-        Serial.println("\n[WiFiMulti] Reconnected!");
-        Serial.printf("[WiFiMulti] New IP: %s\n", WiFi.localIP().toString().c_str());
-        udp.begin(UDP_PORT); // Restart UDP socket listener
+        return "";
       }
 
       // 2. Poll UDP Socket for datagrams
@@ -71,9 +78,8 @@
         remoteClientPort = udp.remotePort();
 
         int len = udp.read(incomingBuffer, sizeof(incomingBuffer) - 1);
-        if (len > 0) {
-          incomingBuffer[len] = '\0';
-        }
+        if (len <= 0) return "";
+        incomingBuffer[len] = '\0';
         String msg = String(incomingBuffer);
         msg.trim();
 
@@ -139,9 +145,8 @@
         remoteClientPort = udp.remotePort();
 
         int len = udp.read(incomingBuffer, sizeof(incomingBuffer) - 1);
-        if (len > 0) {
-          incomingBuffer[len] = '\0';
-        }
+        if (len <= 0) return "";
+        incomingBuffer[len] = '\0';
         String msg = String(incomingBuffer);
         msg.trim();
 
@@ -181,10 +186,16 @@
 
   class ShiftCtrlCharCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-      std::string rxVal = pCharacteristic->getValue();
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+      String rxVal = pCharacteristic->getValue();
+#else
+      std::string raw = pCharacteristic->getValue();
+      String rxVal = String(raw.c_str());
+#endif
       if (rxVal.length() > 0) {
+        rxVal.trim();
         portENTER_CRITICAL(&bleMux);
-        bleIncomingCommand = String(rxVal.c_str());
+        bleIncomingCommand = rxVal;
         portEXIT_CRITICAL(&bleMux);
       }
     }
