@@ -1,7 +1,7 @@
 name: shiftctrlhub_mobile
-description: ShiftCtrlHub universal robotics remote control Flutter mobile client (Beta).
+description: ShiftCtrlHub Live Web Shell + native robotics radio client (Beta).
 publish_to: "none"
-version: 0.1.0-beta+1
+version: 0.1.0-beta+2
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -9,11 +9,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  webview_flutter: ^4.10.0
+  path_provider: ^2.1.5
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/web/index.html

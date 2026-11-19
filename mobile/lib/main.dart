@@ -1,19 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
-void main() async {
+const String kRemoteUiUrl = 'https://zeeshan716.github.io/ShiftCtrlHub/index.html';
+const String kBundledAssetPath = 'assets/web/index.html';
+const String kCachedFilename = 'cached_index.html';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
-  runApp(const ShiftCtrlHubApp());
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  runApp(const ShiftCtrlHubShellApp());
 }
 
-class ShiftCtrlHubApp extends StatelessWidget {
-  const ShiftCtrlHubApp({super.key});
+class ShiftCtrlHubShellApp extends StatelessWidget {
+  const ShiftCtrlHubShellApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,53 +32,180 @@ class ShiftCtrlHubApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF050507),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF6D001A),
-          surface: Color(0xFF0C0C0E),
-        ),
       ),
-      home: const CockpitPage(),
+      home: const LiveWebShellPage(),
     );
   }
 }
 
-class CockpitPage extends StatefulWidget {
-  const CockpitPage({super.key});
+class LiveWebShellPage extends StatefulWidget {
+  const LiveWebShellPage({super.key});
 
   @override
-  State<CockpitPage> createState() => _CockpitPageState();
+  State<LiveWebShellPage> createState() => _LiveWebShellPageState();
 }
 
-class _CockpitPageState extends State<CockpitPage> {
-  String _targetIp = '192.168.4.1';
-  int _targetPort = 3333;
-  double _speed = 180;
-  String _lastTx = 'READY';
+class _LiveWebShellPageState extends State<LiveWebShellPage> {
+  late final WebViewController _webController;
   RawDatagramSocket? _udpSocket;
+  File? _cachedFile;
+  bool _webReady = false;
+  bool _updateBannerVisible = false;
+  String? _statusNotice;
 
   @override
   void initState() {
     super.initState();
-    _initUdp();
+    _initController();
+    _initUdpSocket();
+    _bootOfflineFirstThenSync();
   }
 
-  Future<void> _initUdp() async {
+  void _initController() {
+    _webController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF050507))
+      ..addJavaScriptChannel(
+        'ShiftCtrlNative',
+        onMessageReceived: (JavaScriptMessage message) {
+          _handleBridgeMessage(message.message);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            if (mounted) {
+              _webController.runJavaScript('applyNativeShellLayout && applyNativeShellLayout();');
+            }
+          },
+        ),
+      );
+  }
+
+  Future<void> _initUdpSocket() async {
     try {
-      _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      final sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      sock.broadcastEnabled = true;
+      sock.listen((RawSocketEvent event) {
+        if (event != RawSocketEvent.read) return;
+        final datagram = sock.receive();
+        if (datagram == null) return;
+        final text = utf8.decode(datagram.data, allowMalformed: true).trim();
+        if (text.startsWith('IP:')) {
+          final discovered = text.substring(3).trim();
+          final payload = jsonEncode({'discoveredIp': discovered});
+          if (mounted && _webReady) {
+            _webController.runJavaScript(
+              'window.onShiftCtrlNativeEvent && window.onShiftCtrlNativeEvent($payload);',
+            );
+          }
+        }
+      });
+      _udpSocket = sock;
     } catch (_) {
-      // Socket init deferred until retry or OS network grant
+      // Deferred retry when user transmits
     }
   }
 
-  void _sendToken(String token) {
-    setState(() => _lastTx = token);
-    final socket = _udpSocket;
-    if (socket == null) return;
+  /// Boot flow:
+  /// 1. Ensure cached_index.html exists (seeded from bundled APK asset on Day 1).
+  /// 2. Load cached_index.html immediately (0ms offline launch).
+  /// 3. In background, check GitHub Pages for a newer index.html; if updated,
+  ///    overwrite cached_index.html so offline & future launches stay current.
+  Future<void> _bootOfflineFirstThenSync() async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final cacheFile = File('${docsDir.path}/$kCachedFilename');
+    _cachedFile = cacheFile;
+
+    String currentHtml;
+    if (await cacheFile.exists()) {
+      currentHtml = await cacheFile.readAsString();
+    } else {
+      currentHtml = await rootBundle.loadString(kBundledAssetPath);
+      await cacheFile.writeAsString(currentHtml);
+    }
+
+    await _webController.loadFile(cacheFile.path);
+    if (mounted) {
+      setState(() => _webReady = true);
+    }
+
+    // Background cloud UI refresh (non-blocking; ignores failures when offline)
+    unawaited(_syncRemoteUiInBackground(cacheFile, currentHtml));
+  }
+
+  Future<void> _syncRemoteUiInBackground(File cacheFile, String currentHtml) async {
     try {
-      final addr = InternetAddress(_targetIp);
-      socket.send(utf8.encode('$token\n'), addr, _targetPort);
+      final response = await http
+          .get(Uri.parse(kRemoteUiUrl))
+          .timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final remoteHtml = response.body;
+        // Sanity check so router captive-portal pages never corrupt the cache
+        final isValidUi = remoteHtml.contains('ShiftCtrlHub') &&
+            remoteHtml.contains('ShiftCtrlNative');
+        if (isValidUi && remoteHtml != currentHtml) {
+          await cacheFile.writeAsString(remoteHtml);
+          if (mounted) {
+            setState(() => _updateBannerVisible = true);
+          }
+        }
+      }
     } catch (_) {
-      // Ignore transient network send errors during standby
+      // Offline or arena Wi-Fi without internet: keep using cached_index.html silently
+    }
+  }
+
+  Future<void> _reloadFromCache() async {
+    final file = _cachedFile;
+    if (file == null) return;
+    await _webController.loadFile(file.path);
+    if (mounted) {
+      setState(() => _updateBannerVisible = false);
+    }
+  }
+
+  void _handleBridgeMessage(String rawJson) {
+    try {
+      final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
+      final transport = (decoded['transport'] ?? 'softap').toString().toLowerCase();
+      final token = (decoded['token'] ?? '').toString();
+      final ip = (decoded['ip'] ?? '192.168.4.1').toString();
+      final portRaw = decoded['port'];
+      final port = portRaw is int ? portRaw : (int.tryParse('$portRaw') ?? 3333);
+
+      if (token.isEmpty) return;
+
+      if (transport == 'softap' || transport == 'sta') {
+        _sendUdpToken(token, ip, port);
+        if (_statusNotice != null && mounted) {
+          setState(() => _statusNotice = null);
+        }
+      } else if (transport == 'ble' || transport == 'spp') {
+        if (mounted) {
+          setState(() {
+            _statusNotice =
+                '${transport.toUpperCase()} radio driver coming in next mobile update — use SoftAP / STA Wi-Fi today.';
+          });
+        }
+      }
+    } catch (_) {
+      // Ignore malformed bridge payloads
+    }
+  }
+
+  void _sendUdpToken(String token, String ip, int port) {
+    final sock = _udpSocket;
+    if (sock == null) {
+      unawaited(_initUdpSocket());
+      return;
+    }
+    try {
+      final addr = InternetAddress(ip);
+      sock.send(utf8.encode('$token\n'), addr, port);
+    } catch (_) {
+      // Ignore transient network errors when Wi-Fi is switching
     }
   }
 
@@ -78,129 +215,68 @@ class _CockpitPageState extends State<CockpitPage> {
     super.dispose();
   }
 
-  Widget _dirKey(IconData icon, String cmd) {
-    return GestureDetector(
-      onTapDown: (_) => _sendToken(cmd),
-      onTapUp: (_) => _sendToken('C:S'),
-      onTapCancel: () => _sendToken('C:S'),
-      child: Container(
-        width: 68,
-        height: 68,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1B1B22),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF272730)),
-        ),
-        child: Icon(icon, color: Colors.white, size: 30),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF050507),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
-            children: [
-              // Top header bar
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.circle, color: Color(0xFF10B981), size: 10),
-                      SizedBox(width: 8),
-                      Text(
-                        'ShiftCtrlHub',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.6,
+        child: Stack(
+          children: [
+            if (_webReady)
+              WebViewWidget(controller: _webController)
+            else
+              const Center(
+                child: CircularProgressIndicator(color: Color(0xFF6D001A)),
+              ),
+            if (_updateBannerVisible)
+              Positioned(
+                top: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Material(
+                    color: const Color(0xFF6D001A),
+                    borderRadius: BorderRadius.circular(20),
+                    elevation: 6,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: _reloadFromCache,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        child: Text(
+                          'New UI cached from GitHub — Tap to apply',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    '$_targetIp:$_targetPort  |  UDP',
-                    style: const TextStyle(color: Color(0xFF8F8F9D), fontSize: 12),
-                  ),
-                ],
-              ),
-              const Divider(color: Color(0xFF272730), height: 20),
-
-              // Main dual-thumb cockpit
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Left thumb: vertical speed throttle
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF141418),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFFD97706)),
-                          ),
-                          child: Text(
-                            _speed.round().toString(),
-                            style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        Expanded(
-                          child: RotatedBox(
-                            quarterTurns: 3,
-                            child: Slider(
-                              value: _speed,
-                              min: 0,
-                              max: 255,
-                              activeColor: const Color(0xFF6D001A),
-                              onChanged: (v) {
-                                setState(() => _speed = v);
-                                _sendToken('S:${v.round()}');
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-
-                    // Right thumb: 4WD D-Pad diamond
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _dirKey(Icons.arrow_upward, 'C:F'),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            _dirKey(Icons.arrow_back, 'C:L'),
-                            const SizedBox(width: 78),
-                            _dirKey(Icons.arrow_forward, 'C:R'),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _dirKey(Icons.arrow_downward, 'C:B'),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
-
-              // Footer rail
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('TX: $_lastTx', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                  const Text('RC // 4WD BETA FLUTTER CLIENT',
-                      style: TextStyle(color: Color(0xFF8F8F9D), fontSize: 11)),
-                ],
+            if (_statusNotice != null)
+              Positioned(
+                bottom: 36,
+                left: 16,
+                right: 16,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE6141418),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF6D001A)),
+                    ),
+                    child: Text(
+                      _statusNotice!,
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+                ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );

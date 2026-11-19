@@ -231,6 +231,14 @@
       border: none;
     }
 
+    body.native-shell {
+      padding: 0;
+    }
+
+    body.native-shell .toolbar-quick {
+      display: none;
+    }
+
     /* Top Quick Utility Bar (For Desktop Testing) */
     .toolbar-quick {
       width: 100%;
@@ -1560,6 +1568,10 @@
         <input type="text" id="cfgIp" value="192.168.4.1" style="height: 32px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-xs); color: var(--text-main); padding: 0 8px; font-family: var(--font-mono); font-size: 11px; width: 100%;">
       </div>
 
+      <button onclick="toggleTheme()" class="quick-btn" style="height: 30px; justify-content: center; margin-top: 8px;">
+        Toggle Dark / Light
+      </button>
+
       <button onclick="saveWirelessSettings()" class="quick-btn" style="background: var(--c-burgundy); color: var(--c-white); font-weight: 700; height: 34px; justify-content: center; margin-top: auto; border: none;">
         Save
       </button>
@@ -1764,7 +1776,20 @@
       const ip = document.getElementById('cfgIp') ? document.getElementById('cfgIp').value : '192.168.4.1';
       const port = document.getElementById('cfgPort') ? document.getElementById('cfgPort').value : 3333;
 
-      // Send to local UDP relay bridge (relative if on port 8080, or via host:8765)
+      // Path A: Native ShiftCtrlHub Mobile WebView Shell (zero-lag local RAM -> UDP/BT)
+      if (window.ShiftCtrlNative && typeof window.ShiftCtrlNative.postMessage === 'function') {
+        try {
+          window.ShiftCtrlNative.postMessage(JSON.stringify({
+            transport: currentTransport,
+            token: token,
+            ip: ip,
+            port: Number(port)
+          }));
+        } catch (err) {}
+        return;
+      }
+
+      // Path B: Desktop/LAN Browser -> Local Python UDP Relay Bridge
       const host = window.location.hostname || 'localhost';
       const bridgeUrl = (window.location.protocol.startsWith('http') && window.location.port === '8080')
         ? '/tx'
@@ -1781,6 +1806,20 @@
         });
       } catch (err) {}
     }
+
+    window.onShiftCtrlNativeEvent = function(msg) {
+      try {
+        const data = typeof msg === 'string' ? JSON.parse(msg) : msg;
+        if (data && data.discoveredIp) {
+          const cfgIp = document.getElementById('cfgIp');
+          const detail = document.getElementById('activeConnDetail');
+          if (cfgIp) cfgIp.value = data.discoveredIp;
+          if (detail && (currentTransport === 'softap' || currentTransport === 'sta')) {
+            detail.textContent = `${data.discoveredIp}:3333`;
+          }
+        }
+      } catch (e) {}
+    };
 
     /* -------------------------------------------------------------------------
        3. 4WD THROTTLE SLIDER (0-255)
@@ -2262,7 +2301,16 @@
       dispatchCommand('CONN:SYNC');
     }
 
+    function applyNativeShellLayout() {
+      if (window.ShiftCtrlNative && typeof window.ShiftCtrlNative.postMessage === 'function') {
+        document.body.classList.add('native-shell');
+        const chassis = document.getElementById('deviceChassis');
+        if (chassis) chassis.classList.add('fullscreen');
+      }
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
+      applyNativeShellLayout();
       setConnectionTransport('softap');
       update4wdThrottleVisual(180);
       init2wdSliders();

@@ -47,9 +47,12 @@
 │       ├── transports.h                 # Wireless transport engines (STA UDP, SoftAP, BLE, SPP)
 │       └── README.md                    # Detailed firmware flashing and wiring guide
 ├── mobile/
-│   ├── pubspec.yaml                     # Flutter mobile client manifest (Beta skeleton)
-│   ├── README.md                        # Mobile app parity & build notes
-│   └── lib/main.dart                    # Landscape cockpit + raw UDP driver
+│   ├── pubspec.yaml                     # Flutter Live Web Shell manifest (Beta)
+│   ├── README.md                        # Offline-first cache & native radio architecture
+│   ├── assets/web/index.html            # Bundled offline fallback UI inside APK
+│   └── lib/main.dart                    # WebView shell + offline cache + UDP driver
+├── .github/workflows/
+│   └── build_mobile_apk.yml             # Automated Android Beta APK builder
 ├── tools/
 │   ├── shiftctrlhub_server.py           # Local web & UDP datagram relay bridge
 │   └── udp_bridge.py                    # Standalone lightweight UDP forwarder
