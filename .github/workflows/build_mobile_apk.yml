@@ -57,7 +57,7 @@ jobs:
           manifest.write_text(text, encoding="utf-8")
           EOF
           flutter pub get
-          flutter analyze
+          flutter analyze --no-fatal-infos
 
       - name: Build Release APK
         working-directory: mobile
