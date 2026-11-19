@@ -55,6 +55,20 @@ jobs:
               import re
               text = re.sub(r'android:label="[^"]+"', 'android:label="ShiftCtrlHub"', text, count=1)
           manifest.write_text(text, encoding="utf-8")
+
+          # Skip AGP lintVitalAnalyzeRelease internal crash on webview_flutter_android
+          kts = Path("android/build.gradle.kts")
+          grv = Path("android/build.gradle")
+          if kts.exists():
+              kt = kts.read_text(encoding="utf-8")
+              if "lintVital" not in kt:
+                  kt += '\nsubprojects {\n    tasks.configureEach {\n        if (name.contains("lintVital", ignoreCase = true)) {\n            enabled = false\n        }\n    }\n}\n'
+                  kts.write_text(kt, encoding="utf-8")
+          elif grv.exists():
+              gt = grv.read_text(encoding="utf-8")
+              if "lintVital" not in gt:
+                  gt += '\nsubprojects {\n    tasks.configureEach { t ->\n        if (t.name.toLowerCase().contains("lintvital")) {\n            t.enabled = false\n        }\n    }\n}\n'
+                  grv.write_text(gt, encoding="utf-8")
           EOF
           flutter pub get
           flutter analyze --no-fatal-infos
