@@ -38,6 +38,7 @@ jobs:
         working-directory: mobile
         run: |
           flutter create --platforms=android --org com.zeeshan716 --project-name shiftctrlhub_mobile .
+          rm -f test/widget_test.dart
           python3 - <<'EOF'
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
