@@ -39,13 +39,17 @@
 ├── ShiftCtrlHub_Components_Catalog.pdf  # Official 3-column component catalog with reference snapshots
 ├── remote_parts_catalog.md              # Standardized Markdown catalog with part identifiers
 ├── firmware/
-│   └── shiftctrlhub/                    # Modular multi-MCU robotics firmware
-│       ├── shiftctrlhub.ino             # Main sketch setup() and loop() + command processor
-│       ├── config.h                     # Hardware pinouts, multi-AP Wi-Fi credentials, and settings
-│       ├── robot_drive.h                # 4WD skid-steer & 2WD servo steer kinematics
-│       ├── lfr_pidv.h                   # 5-IR sensor weighted PIDV line follower & pattern recovery
-│       ├── transports.h                 # Wireless transport engines (STA UDP, SoftAP, BLE, SPP)
-│       └── README.md                    # Detailed firmware flashing and wiring guide
+│   ├── shiftctrlhub/                    # All-in-One firmware (RC 4WD/2WD + LFR PIDV)
+│   │   ├── shiftctrlhub.ino             # Main sketch setup() and loop() + command processor
+│   │   ├── config.h                     # Hardware pinouts, multi-AP Wi-Fi credentials, and settings
+│   │   ├── robot_drive.h                # 4WD skid-steer & 2WD servo steer kinematics
+│   │   ├── lfr_pidv.h                   # 5-IR sensor weighted PIDV line follower & pattern recovery
+│   │   ├── transports.h                 # Wireless transport engines (Hybrid/STA/SoftAP UDP, BLE, SPP)
+│   │   └── README.md                    # Detailed firmware flashing and wiring guide
+│   ├── shiftctrlhub_rc/                 # Dedicated RC-Only firmware (4WD + 2WD + Joystick)
+│   │   └── shiftctrlhub_rc.ino
+│   └── shiftctrlhub_lfr/                # Dedicated LFR-Only firmware (PIDV + line recovery)
+│       └── shiftctrlhub_lfr.ino
 ├── mobile/
 │   ├── pubspec.yaml                     # Flutter Live Web Shell manifest (Beta)
 │   ├── README.md                        # Offline-first cache & native radio architecture
